@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Dash Web</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <audio id="deathSound" src="death.mp3"></audio>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = src;
+                img.onload = () => resolve(img);
+                img.onerror = () => reject(new Error(`Error cargando la imagen: ${src}`));
+            });
+        }
+
+        function resetGame() {
+            location.reload();
+        }
+
+        Promise.all([
+            loadImage("player.png"),
+            loadImage("obstacle.png"),
+            loadImage("obstacle2.png"),
+            loadImage("background.png")
+        ]).then(([playerImg, obstacleImg, obstacle2Img, bgImg]) => {
+            let player = { x: 50, y: canvas.height - 80, width: 40, height: 40, dy: 0, gravity: 0.8, jumpPower: -12, grounded: false, jumpBuffer: 3 };
+            let obstacles = [];
+            let gameSpeed = 5;
+
+            function spawnObstacle() {
+                let height = 40;
+                let type = Math.random() < 0.5 ? "obstacle" : "obstacle2";
+                let newObstacle = { x: canvas.width, y: canvas.height - height, width: 40, height: height, type: type };
+                
+                if (obstacles.length > 0) {
+                    let lastObstacle = obstacles[obstacles.length - 1];
+                    if (newObstacle.x - lastObstacle.x < 100) {
+                        newObstacle.x += 100;
+                    }
+                }
+                obstacles.push(newObstacle);
+                setTimeout(spawnObstacle, Math.random() * 2000 + 1000);
+            }
+            spawnObstacle();
+
+            function update() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+                
+                if (player.jumpBuffer > 0) {
+                    player.jumpBuffer--;
+                } else {
+                    player.dy += player.gravity;
+                }
+                player.y += player.dy;
+                
+                if (player.y >= canvas.height - player.height) {
+                    player.y = canvas.height - player.height;
+                    player.dy = 0;
+                    player.grounded = true;
+                }
+
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+                
+                for (let i = 0; i < obstacles.length; i++) {
+                    let obs = obstacles[i];
+                    obs.x -= gameSpeed;
+                    let img = obs.type === "obstacle" ? obstacleImg : obstacle2Img;
+                    ctx.drawImage(img, obs.x, obs.y, obs.width, obs.height);
+                    if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+                    
+                    // Hitbox específica para cada tipo de obstáculo
+                    if (obs.type === "obstacle") {
+                        if (
+                            player.x < obs.x + obs.width &&
+                            player.x + player.width > obs.x &&
+                            player.y + player.height > obs.y
+                        ) {
+                            document.getElementById("deathSound").play();
+                            setTimeout(resetGame, 500);
+                            return;
+                        }
+                    } else if (obs.type === "obstacle2") {
+                        if (
+                            player.x < obs.x + obs.width &&
+                            player.x + player.width > obs.x &&
+                            player.y + player.height > obs.y + 10 // Ajuste para no morir por la parte superior
+                        ) {
+                            document.getElementById("deathSound").play();
+                            setTimeout(resetGame, 500);
+                            return;
+                        }
+                    }
+                }
+                requestAnimationFrame(update);
+            }
+            update();
+            
+            function jump() {
+                if (player.grounded) {
+                    player.dy = player.jumpPower;
+                    player.grounded = false;
+                    player.jumpBuffer = 2; // Reduce la flotabilidad
+                }
+            }
+            
+            window.addEventListener("keydown", (e) => { if (e.code === "Space") jump(); });
+            window.addEventListener("click", jump);
+        }).catch(error => {
+            console.error(error);
+        });
+    </script>
+</body>
+</html>
